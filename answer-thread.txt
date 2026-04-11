@@ -1,0 +1,15 @@
+导致并发出错的情况：
+static void 
+insert(int key, int value, struct entry **p, struct entry *n)
+{
+  struct entry *e = malloc(sizeof(struct entry));
+  e->key = key;
+  e->value = value;
+  e->next = n;
+  *p = e;
+}
+
+两个线程同时运行到insert，并且插入的key均为x，并且put调用insert时传入的p和n是相同的。
+于是先执行的线程1的e1->next指向原先的第一个元素，并且桶指向了e1。
+后执行的线程2的e1->next也指向原先的第一个元素，并且桶指向了e2。
+最终e1变成了野指针，线程1的数据没有被真正储存，并且产生内存泄露。

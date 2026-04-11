@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -59,6 +60,7 @@ sys_sleep(void)
   acquire(&tickslock);
   ticks0 = ticks;
 #ifdef LAB_TRAPS
+  backtrace();
 #endif
   while(ticks - ticks0 < n){
     if(killed(myproc())){
@@ -101,4 +103,50 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64
+sys_trace(void)
+{
+  int mask;
+  argint(0, &mask);
+  myproc()->trace_mask = mask;
+  return 0;
+}
+
+uint64
+sys_sysinfo(void)
+{
+  uint64 addr;
+  struct sysinfo info;
+  struct proc *p = myproc();
+
+  argaddr(0, &addr);
+
+  info.freemem = get_freemem();
+  info.nproc = get_nproc();
+
+  if(copyout(p->pagetable, addr, (char *)&info, sizeof(info)) < 0)
+    return -1;
+
+  return 0;
+}
+uint64
+sys_sigalarm(){
+  int ticks;
+  uint64 handler;
+  struct proc *p = myproc();
+  argint(0, &ticks);
+  argaddr(1, &handler);
+  p->alarm_interval=ticks;
+  p->alarm_handler=handler;
+  p->alarm_ticks=0;
+  return 0;
+}
+uint64
+sys_sigreturn(void){
+  struct proc *p = myproc();
+  memmove(p->trapframe,p->alarm_trapframe, sizeof(struct trapframe));
+  p->alarm_running=0;
+  return p->trapframe->a0;
 }
