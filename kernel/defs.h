@@ -71,7 +71,9 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
-uint64          get_freemem(void);
+uint64          get_freemem(uint64 cpu_id);
+uint64          total_freemem(void);
+
 
 // log.c
 void            initlog(int, struct superblock*);

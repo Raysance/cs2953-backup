@@ -123,7 +123,7 @@ sys_sysinfo(void)
 
   argaddr(0, &addr);
 
-  info.freemem = get_freemem();
+  info.freemem = total_freemem();
   info.nproc = get_nproc();
 
   if(copyout(p->pagetable, addr, (char *)&info, sizeof(info)) < 0)
