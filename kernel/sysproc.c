@@ -76,9 +76,25 @@ sys_sleep(void)
 
 #ifdef LAB_PGTBL
 int
-sys_pgaccess(void)
-{
-  // lab pgtbl: your code here.
+sys_pgaccess(void){
+  uint64 base;
+  int len;
+  uint64 user_mask_addr;
+  uint64 kernel_mask=0;
+  argaddr(0, &base);
+  argint(1, &len);
+  argaddr(2, &user_mask_addr);
+  for (int i=0;i<len;i++){
+    uint64 va=base+i*PGSIZE;
+    pte_t *pte=walk(myproc()->pagetable,va,0);
+    if(pte&&(*pte&PTE_A)){
+      kernel_mask|=(1<<i);
+      *pte&=~PTE_A;
+    }
+  }
+  if (copyout(myproc()->pagetable,user_mask_addr,(char *)&kernel_mask,sizeof(kernel_mask))<0){
+    return -1;
+  }
   return 0;
 }
 #endif

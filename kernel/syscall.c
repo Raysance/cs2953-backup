@@ -105,6 +105,7 @@ extern uint64 sys_trace(void);
 extern uint64 sys_sysinfo(void);
 extern uint64 sys_sigalarm(void);
 extern uint64 sys_sigreturn(void);
+extern uint64 sys_pgaccess(void);
 
 #ifdef LAB_NET
 extern uint64 sys_connect(void);
@@ -177,6 +178,7 @@ static char *syscall_names[] = {
 [SYS_sigreturn] "sigreturn",
 [SYS_symlink] "symlink",
 [SYS_mmap]    "mmap",
+[SYS_pgaccess]    "pgaccess"
 };
 
 void

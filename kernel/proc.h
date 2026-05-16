@@ -111,4 +111,5 @@ struct proc {
   int alarm_ticks;
   int alarm_running;
   struct trapframe* alarm_trapframe;
+  struct usyscall* usyscall;
 };

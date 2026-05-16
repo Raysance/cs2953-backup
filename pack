@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# 检查是否提供了压缩包名称参数
+if [ $# -eq 0 ]; then
+    echo "错误：请提供压缩包名称作为参数"
+    echo "用法: $0 <压缩包名称.zip>"
+    exit 1
+fi
+
+# 获取压缩包名称
+ZIP_NAME="$1"
+
+# 检查压缩包名称是否以.zip结尾，如果不是则添加
+if [[ ! "$ZIP_NAME" =~ \.zip$ ]]; then
+    ZIP_NAME="${ZIP_NAME}.zip"
+fi
+
+# 执行 make clean
+echo "正在执行 make clean..."
+make clean
+
+# 检查 make clean 是否成功
+if [ $? -ne 0 ]; then
+    echo "警告：make clean 执行失败，但继续执行压缩操作"
+fi
+
+# 压缩当前目录
+echo "正在压缩当前目录为 $ZIP_NAME..."
+zip -r "$ZIP_NAME" ./*
+
+# 检查压缩是否成功
+if [ $? -ne 0 ]; then
+    echo "错误：压缩失败"
+    exit 1
+fi
+
+# 创建目标目录（如果不存在）
+TARGET_DIR="/mnt/d/desktop"
+if [ ! -d "$TARGET_DIR" ]; then
+    echo "创建目标目录 $TARGET_DIR..."
+    mkdir -p "$TARGET_DIR"
+fi
+
+# 复制压缩包到目标目录
+echo "正在移动 $ZIP_NAME 到 $TARGET_DIR/..."
+mv "$ZIP_NAME" "$TARGET_DIR/"
+
+# 检查复制是否成功
+if [ $? -eq 0 ]; then
+    echo "操作完成！压缩包已保存到 $TARGET_DIR/$ZIP_NAME"
+else
+    echo "错误：复制失败"
+    exit 1
+fi
