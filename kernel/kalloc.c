@@ -23,10 +23,15 @@ struct {
   struct run *freelist;
 } kmem[NCPU];
 
+struct {
+  struct spinlock lock;
+  int count[PHYSTOP / PGSIZE];
+} p_ref;
 
 void
 kinit()
 {
+  initlock(&p_ref.lock, "p_ref");
   for (uint64 i=0;i<NCPU;i++)
   {
     char name[8];
@@ -56,6 +61,15 @@ kfree(void *pa)
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
+
+  acquire(&p_ref.lock);
+  if (p_ref.count[(uint64)pa / PGSIZE] > 1) {
+    p_ref.count[(uint64)pa / PGSIZE]--;
+    release(&p_ref.lock);
+    return;
+  }
+  p_ref.count[(uint64)pa / PGSIZE] = 0;
+  release(&p_ref.lock);
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -100,9 +114,35 @@ kalloc(void)
   release(&kmem[id].lock);
   pop_off();
 
-  if(r)
+  if(r) {
     memset((char*)r, 5, PGSIZE); // fill with junk
+    acquire(&p_ref.lock);
+    p_ref.count[(uint64)r / PGSIZE] = 1;
+    release(&p_ref.lock);
+  }
   return (void*)r;
+}
+
+void
+kref_inc(uint64 pa)
+{
+  if((pa % PGSIZE) != 0 || (char*)pa < end || pa >= PHYSTOP)
+    panic("kref_inc");
+  acquire(&p_ref.lock);
+  p_ref.count[pa / PGSIZE]++;
+  release(&p_ref.lock);
+}
+
+int
+kref_get(uint64 pa)
+{
+  if((pa % PGSIZE) != 0 || (char*)pa < end || pa >= PHYSTOP)
+    panic("kref_get");
+  int count;
+  acquire(&p_ref.lock);
+  count = p_ref.count[pa / PGSIZE];
+  release(&p_ref.lock);
+  return count;
 }
 
 uint64
