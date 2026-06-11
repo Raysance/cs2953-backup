@@ -70,7 +70,7 @@
 //   TRAPFRAME (p->trapframe, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
-#if defined(LAB_PGTBL) || defined(LAB_COW)
+#if defined(LAB_PGTBL) || defined(LAB_COW) || defined(LAB_FS)
 #define USYSCALL (TRAPFRAME - PGSIZE)
 
 struct usyscall {
