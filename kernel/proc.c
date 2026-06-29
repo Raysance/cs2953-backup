@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "defs.h"
 
+extern int do_munmap(uint64, int);
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -337,6 +339,12 @@ fork(void)
   }
   np->sz = p->sz;
 
+  for (int i=0;i<16;i++){
+    if (p->vmas[i].valid){
+      np->vmas[i]=p->vmas[i];
+      filedup(p->vmas[i].f);
+    }
+  }
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -394,6 +402,11 @@ exit(int status)
   if(p == initproc)
     panic("init exiting");
 
+  for (int i=0;i<16;i++){
+    if (p->vmas[i].valid){
+      do_munmap(p->vmas[i].va,p->vmas[i].length);
+    }
+  }
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
     if(p->ofile[fd]){

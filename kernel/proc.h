@@ -81,6 +81,16 @@ struct trapframe {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+struct vma {
+  int valid;
+  uint64 va;
+  uint64 length;
+  int prot;
+  int flags;
+  struct file *f;
+  uint64 offset;
+};
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -112,4 +122,6 @@ struct proc {
   int alarm_running;
   struct trapframe* alarm_trapframe;
   struct usyscall* usyscall;
+
+  struct vma vmas[16];
 };

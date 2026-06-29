@@ -2,10 +2,13 @@
 #include "param.h"
 #include "memlayout.h"
 #include "riscv.h"
-#include "spinlock.h"
+#include "spinlock.h"  // spinlock 必须在 proc.h 和 defs.h 之前
 #include "proc.h"
 #include "defs.h"
-
+#include "sleeplock.h" // file.h 内部用到了 sleeplock，必须先引入它
+#include "fs.h"        // file.h 内部用到了 NDIRECT，必须先引入它
+#include "file.h"      // 引入 struct file 的完整结构
+#include "fcntl.h"     // 引入 PROT_READ 和 PROT_WRITE
 struct spinlock tickslock;
 uint ticks;
 
@@ -29,6 +32,51 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+int
+handle_mmap_pagefault(uint64 va)
+{
+  struct proc *p=myproc();
+  struct vma *v=0;
+  if(va>=MAXVA||va==0) return -1;
+  for (int i=0;i<16;i++){
+    if (p->vmas[i].valid&&va>=p->vmas[i].va&&va<p->vmas[i].va+p->vmas[i].length){
+      v=&p->vmas[i];
+      break;
+    }
+  }
+  if (v==0) return -1;
+  uint64 page_va=PGROUNDDOWN(va);
+  char *mem=kalloc();
+  if (mem==0) return -1;
+  memset(mem,0,PGSIZE);
+  
+  uint64 map_offset=page_va - v->va;
+  uint64 file_offset=v->offset + map_offset;
+
+  uint read_size=PGSIZE;
+  if (map_offset+PGSIZE>v->length){
+    read_size=v->length-map_offset;
+  }
+
+  ilock(v->f->ip);
+  
+  int n=readi(v->f->ip,0,(uint64)mem,file_offset,read_size);
+  iunlock(v->f->ip);
+
+  if(n<0){
+    kfree(mem);
+    return -1;
+  }
+  int perm=PTE_U;
+  if (v->prot&PROT_READ) perm|=PTE_R;
+  if (v->prot&PROT_WRITE) perm|=PTE_W;
+
+  if (mappages(p->pagetable,page_va,PGSIZE,(uint64)mem,perm)!=0){
+    kfree(mem);
+    return -1;
+  }
+  return 0;
+}
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -65,9 +113,13 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if(r_scause() == 15){
-    if(cow_handler(p->pagetable, r_stval()) < 0)
-      setkilled(p);
+  } else if(r_scause() == 13||r_scause()==15){
+    uint64 va=r_stval();
+    if(r_scause() == 15 && cow_handler(p->pagetable, va) == 0){
+      ;
+    } else if(handle_mmap_pagefault(va)<0){
+      p->killed=1;
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

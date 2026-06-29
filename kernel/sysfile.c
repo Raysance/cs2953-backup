@@ -546,3 +546,111 @@ sys_symlink(void){
   end_op();
   return 0;
 }
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int length,prot,flags,fd;
+  uint64 offset;
+  struct file *f;
+  struct proc *p=myproc();
+
+  if(argfd(4, &fd, &f) < 0) {
+    return 0xffffffffffffffffL;
+  }
+  argaddr(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argaddr(5, &offset);
+
+  if ((prot&PROT_WRITE)&&(f->writable==0)&&(flags&MAP_SHARED)){
+    return 0xffffffffffffffffL;
+  }
+  struct vma *nvma=0;
+  // int vma_idx=-1;
+  for (int i=0;i<16;i++){
+    if (p->vmas[i].valid==0){
+      nvma=&p->vmas[i];
+      // vma_idx=i;
+      break;
+    }
+  }
+  if(nvma==0) return 0xffffffffffffffffL;
+  uint64 va_start=0x40000000;
+  for (int i=0;i<16;i++){
+    if (p->vmas[i].valid&&(p->vmas[i].va+p->vmas[i].length>va_start)){
+      va_start=PGROUNDUP(p->vmas[i].va+p->vmas[i].length);
+    }
+  }
+  nvma->valid=1;
+  nvma->va=va_start;
+  nvma->length=PGROUNDUP(length);
+  nvma->prot=prot;
+  nvma->flags=flags;
+  nvma->f=f;
+  nvma->offset=offset;
+
+  filedup(f);
+  
+  return nvma->va;
+}
+int
+do_munmap(uint64 addr,int length)
+{
+  struct proc *p=myproc();
+  struct vma *v=0;
+
+  for (int i=0;i<16;i++){
+    if (p->vmas[i].valid&&addr>=p->vmas[i].va&&addr+length<=p->vmas[i].va+p->vmas[i].length){
+      v=&p->vmas[i];
+      break;
+    }
+  }
+  if (v==0) return -1;
+  
+  for (uint64 a=addr;a<addr+length;a+=PGSIZE){
+    pte_t *pte=walk(p->pagetable,a,0);
+    if (pte&&(*pte &PTE_V)){
+      if((v->flags&MAP_SHARED)&&(*pte&PTE_D)){
+        uint64 file_offset=v->offset + a - v->va;
+        uint64 map_offset=a - v->va;
+
+        uint write_size=PGSIZE;
+        if (map_offset+PGSIZE>v->length){
+          write_size=v->length-map_offset;
+        }
+        uint64 pa=PTE2PA(*pte);
+        begin_op();
+        ilock(v->f->ip);
+        writei(v->f->ip,0,pa,file_offset,write_size);
+        iunlock(v->f->ip);
+        end_op();
+      }
+      uvmunmap(p->pagetable,a,1,1);
+    }
+  }
+  
+  if (addr==v->va&&length==v->length){
+    v->valid=0;
+    fileclose(v->f);
+  }
+  else if (addr==v->va){
+    v->va+=length;
+    v->offset+=length;
+    v->length-=length;
+  }
+  else{
+    v->length-=length;
+  }
+  return 0;
+}
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  int length;
+  argaddr(0,&addr);
+  argint(1,&length);
+  return do_munmap(addr,length);
+}
